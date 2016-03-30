@@ -17,7 +17,7 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     // Override point for customization after application launch.
-    [[UINavigationBar appearance] setBackgroundColor:[UIColor blackColor]];
+    [[UINavigationBar appearance] setBackgroundColor:[UIColor whiteColor]];
     [[UINavigationBar appearance] setBarTintColor:[UIColor blackColor]];
     
     MainViewController *mainVC = [MainViewController new];

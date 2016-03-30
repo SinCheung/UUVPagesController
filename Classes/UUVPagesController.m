@@ -1,6 +1,6 @@
 //
 //  UUVPagesController.m
-//  UUVideo
+//  UUV
 //
 //  Created by Admin on 16/3/25.
 //  Copyright © 2016年 UUV. All rights reserved.
@@ -57,6 +57,7 @@ static UIEdgeInsets UUV_UIEdgeInsetsFromUIRectEdge(UIRectEdge rectEdge) {
         _contanierView.pagingEnabled = YES;
         _contanierView.showsVerticalScrollIndicator = NO;
         _contanierView.showsHorizontalScrollIndicator = NO;
+        _contanierView.scrollsToTop = NO;
     }
     return _contanierView;
 }
@@ -72,9 +73,10 @@ static UIEdgeInsets UUV_UIEdgeInsetsFromUIRectEdge(UIRectEdge rectEdge) {
         _topBar.itemSelectedColor = self.highlightsColor;
         _topBar.itemSelectedScale = self.highlightsScale;
         _topBar.delegate = self.topBarDelegate;
-        _topBar.showIndicator = self.showIndicator;
+        _topBar.style = self.topBarStyle;
         _topBar.indicatorColor = self.indicatorColor;
         _topBar.indicatorHeight = self.indicatorHeight;
+        _topBar.itemHorizontalSpace = self.itemHorizontalSpace;
     }
     return _topBar;
 }

@@ -1,6 +1,6 @@
 //
 //  UUVPagesController.h
-//  UUVideo
+//  UUV
 //
 //  Created by Admin on 16/3/25.
 //  Copyright © 2016年 UUV. All rights reserved.
@@ -29,7 +29,8 @@
 @property (nonatomic, readonly) NSUInteger index;///<the index of current highlights item in top list bar.
 @property (nonatomic, strong) UIColor *indicatorColor;///<The color for indicator`s color.Default use highlightsColor.
 @property (nonatomic, assign) CGFloat indicatorHeight;///<The height for indicator`s height.Default is 2.f.
-@property (nonatomic, assign) BOOL    showIndicator;///<A flag for specified whether show indicator view.Default is NO.
+@property (nonatomic, assign) CGFloat itemHorizontalSpace;///<The horizontal space between items in top bar.Default is 10.
+@property (nonatomic, assign) UUVListTopBarStyle topBarStyle;///<A specified top bar style.Default use .scale.
 
 - (void)addParentViewController:(UIViewController *)vc;///<Make contanier to dispalyed on the specified viewController.
 - (void)reloadData;///<If you changed the viewControllers value,you should call this method to refresh all layout.

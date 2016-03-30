@@ -550,6 +550,7 @@
 				8481845C1CA90EE300DFCA25 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		8481845D1CA90EE300DFCA25 /* Build configuration list for PBXNativeTarget "UUVPagesControllerDemoTests" */ = {
 			isa = XCConfigurationList;
@@ -558,6 +559,7 @@
 				8481845F1CA90EE300DFCA25 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		848184601CA90EE300DFCA25 /* Build configuration list for PBXNativeTarget "UUVPagesControllerDemoUITests" */ = {
 			isa = XCConfigurationList;
@@ -566,6 +568,7 @@
 				848184621CA90EE300DFCA25 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

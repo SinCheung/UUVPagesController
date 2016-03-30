@@ -40,6 +40,16 @@
     // Dispose of any resources that can be recreated.
 }
 
+- (BOOL)prefersStatusBarHidden
+{
+    return NO;
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return UIStatusBarStyleLightContent;
+}
+
 #pragma mark - vars
 - (NSArray *)titles
 {
@@ -50,7 +60,12 @@
 }
 
 #pragma mark - PagesController delegate
-- (void)itemAtIndex:(NSUInteger)index didSelectInTopBar:(UUVListTopBar *)bar
+- (void)topBar:(UUVListTopBar *)bar didTransitionToIndex:(NSUInteger)index
+{
+    
+}
+
+- (void)topBar:(UUVListTopBar *)bar willTransitionFromIndex:(NSUInteger)fromIdx toIndex:(NSUInteger)toIdx
 {
     
 }

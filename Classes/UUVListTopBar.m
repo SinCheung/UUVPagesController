@@ -1,6 +1,6 @@
 //
 //  ListTopBar.m
-//  UUVideo
+//  UUV
 //
 //  Created by Admin on 16/3/24.
 //  Copyright © 2016年 UUV. All rights reserved.
@@ -32,15 +32,19 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
 
 @interface UUVListTopBar()
 {
-    CGFloat _deltaX;
+    CGFloat _finalContentWidth;
     CGFloat _contanierWidth;
     CGFloat _externContanierWidth;
     BOOL    _modifyOffsetManual;
     BOOL    _shouldChangeItemPosition;
+    struct {
+        unsigned int itemDidSelected : 1;
+        unsigned int itemTransition  : 1;
+    } _listTopDelegateFlag;
 }
 @property (nonatomic, strong) UIScrollView *itemsContanier;
 @property (nonatomic, strong) UIView       *indicator;
-@property (nonatomic, strong, readwrite) NSMutableArray *itemViews;
+@property (nonatomic, strong, readwrite) NSMutableArray<UIButton*> *itemViews;
 @end
 
 @implementation UUVListTopBar
@@ -69,9 +73,10 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     
     [_itemViews removeAllObjects];
     _selectedIndex = 0;
-    _deltaX = 0.f;
+    _finalContentWidth = 0.f;
     _itemSelectedScale = 17.f/15.f;
     _shouldChangeItemPosition = NO;
+    _itemHorizontalSpace = _itemHorizontalSpace!=0 ?: UUVListTopBarItemSpace;
     
     [self addSubview:self.itemsContanier];
     if (self.itemsContanier.subviews.count) {
@@ -91,10 +96,33 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         }
     }];
     
-    _shouldChangeItemPosition = (_deltaX>_contanierWidth);
-    _itemsContanier.contentSize = CGSizeMake(_deltaX, CGRectGetHeight(_itemsContanier.frame));
+    if (_finalContentWidth<_contanierWidth) {
+        __block CGFloat totalWidth = 0.f;
+        [_itemViews enumerateObjectsUsingBlock:^(UIButton* _Nonnull btn, NSUInteger idx, BOOL * _Nonnull stop) {
+            totalWidth += CGRectGetWidth(btn.frame);
+        }];
+        
+        CGFloat space = (_contanierWidth-totalWidth)/(_itemViews.count+1);
+        [_itemViews enumerateObjectsUsingBlock:^(UIButton* _Nonnull btn, NSUInteger idx, BOOL * _Nonnull stop) {
+            CGRect frame = btn.frame;
+            if (idx==0) {
+                frame.origin.x = space;
+            } else {
+                CGRect lastFrame = _itemViews[idx-1].frame;
+                frame.origin.x = CGRectGetMaxX(lastFrame)+space;
+            }
+            
+            btn.frame = frame;
+        }];
+        
+        _itemHorizontalSpace = space;
+        _finalContentWidth = CGRectGetMaxX(_itemViews.lastObject.frame);
+    }
     
-    if (_showIndicator) {
+    _shouldChangeItemPosition = (_finalContentWidth>_contanierWidth);
+    _itemsContanier.contentSize = CGSizeMake(_finalContentWidth, CGRectGetHeight(_itemsContanier.frame));
+    
+    if (_style==UUVListTopBarStyleIndicator) {
         CGRect frame = self.indicator.frame;
         UIButton *firstbtn = _itemViews.firstObject;
         frame.size.width = CGRectGetWidth(firstbtn.frame);
@@ -125,8 +153,8 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     
     CGFloat width = [title sizeWithAttributes:@{NSFontAttributeName : font}].width;
     width = width>UUVListTopBarItemMinWidth ? width : UUVListTopBarItemMinWidth;
-    btn.frame = CGRectMake(_deltaX, 0, width, CGRectGetHeight(self.frame));
-    _deltaX+=(width+UUVListTopBarItemSpace);
+    btn.frame = CGRectMake(_finalContentWidth, 0, width, CGRectGetHeight(self.frame));
+    _finalContentWidth+=(width+_itemHorizontalSpace);
     
     return btn;
 }
@@ -151,6 +179,7 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         _itemsContanier.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         _itemsContanier.showsHorizontalScrollIndicator = NO;
         _itemsContanier.showsVerticalScrollIndicator = NO;
+        _itemsContanier.scrollsToTop = NO;
     }
     return _itemsContanier;
 }
@@ -210,7 +239,7 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
 {
     if (![_itemTitles isEqualToArray:itemTitles]) {
         _itemTitles = itemTitles.copy;
-        _deltaX = UUVListTopBarItemSpace;
+        _finalContentWidth = UUVListTopBarItemSpace;
     }
 }
 
@@ -221,6 +250,10 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         
         UIButton *sender = self.itemViews[selectedIndex];
         [self changeClickItemPositon:sender];
+        
+        if (_listTopDelegateFlag.itemDidSelected) {
+            [self.delegate topBar:self didTransitionToIndex:selectedIndex];
+        }
     }
 }
 
@@ -246,6 +279,13 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     _contanierView = contanierView;
     _externContanierWidth = CGRectGetWidth(contanierView.frame);
     [self startObserveContentOffset:_contanierView];
+}
+
+- (void)setDelegate:(id<UUVListTopBarDelegate>)delegate
+{
+    _delegate = delegate;
+    _listTopDelegateFlag.itemDidSelected = [delegate respondsToSelector:@selector(topBar:didTransitionToIndex:)];
+    _listTopDelegateFlag.itemTransition = [delegate respondsToSelector:@selector(topBar:willTransitionFromIndex:toIndex:)];
 }
 
 #pragma mark - observe
@@ -296,7 +336,7 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
                 [previosSelectedItem setTitleColor:prev forState:UIControlStateNormal];
                 [nextSelectedItem setTitleColor:next forState:UIControlStateNormal];
                 
-                if (_indicator) {
+                if (_style==UUVListTopBarStyleIndicator) {
                     CGRect frame = _indicator.frame;
                     CGPoint center = _indicator.center;
                     
@@ -313,12 +353,17 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
                     
                     _indicator.frame = frame;
                     _indicator.center = center;
+                } else if (_style==UUVListTopBarStyleScale) {
+                    CGFloat preScale = 1.f + (_itemSelectedScale-1.f)*(1-absRatio);
+                    CGFloat nextScale = 1.f + (_itemSelectedScale-1.f)*absRatio;
+                    previosSelectedItem.transform = CGAffineTransformMakeScale(preScale, preScale);
+                    nextSelectedItem.transform = CGAffineTransformMakeScale(nextScale, nextScale);
                 }
                 
-                CGFloat preScale = 1.f + (_itemSelectedScale-1.f)*(1-absRatio);
-                CGFloat nextScale = 1.f + (_itemSelectedScale-1.f)*absRatio;
-                previosSelectedItem.transform = CGAffineTransformMakeScale(preScale, preScale);
-                nextSelectedItem.transform = CGAffineTransformMakeScale(nextScale, nextScale);
+                if (_listTopDelegateFlag.itemTransition) {
+                    [_delegate topBar:self willTransitionFromIndex:_selectedIndex toIndex:targetIndex];
+                }
+                
                 if (absRatio>0.5f) {
                     self.selectedIndex = _contanierView.contentOffset.x / _externContanierWidth;
                 }
@@ -360,10 +405,6 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
                      } completion:^(BOOL finished) {
                          _modifyOffsetManual = NO;
                      }];
-    
-    if ([self.delegate respondsToSelector:@selector(itemAtIndex:didSelectInTopBar:)]) {
-        [self.delegate itemAtIndex:_selectedIndex didSelectInTopBar:self];
-    }
 }
 
 - (void)changeClickItemPositon:(UIButton *)btn
@@ -376,11 +417,11 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     CGPoint finalPoint = CGPointZero;
     BOOL shouldChange = NO;
     
-    if (itemCenter.x>halfWidth && itemCenter.x<(_deltaX-halfWidth)) {
+    if (itemCenter.x>halfWidth && itemCenter.x<(_finalContentWidth-halfWidth)) {
         finalPoint = CGPointMake(itemCenter.x-halfWidth, 0);
         shouldChange = YES;
-    } else if (itemCenter.x>(_deltaX-halfWidth)) {
-        finalPoint = CGPointMake(_deltaX-_contanierWidth, 0);
+    } else if (itemCenter.x>(_finalContentWidth-halfWidth)) {
+        finalPoint = CGPointMake(_finalContentWidth-_contanierWidth, 0);
         shouldChange = YES;
     } else if (itemCenter.x<halfWidth) {
         shouldChange = YES;

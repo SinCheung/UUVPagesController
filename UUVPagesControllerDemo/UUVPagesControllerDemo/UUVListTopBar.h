@@ -1,6 +1,6 @@
 //
 //  ListTopBar.h
-//  UUVideo
+//  UUV
 //
 //  Created by Admin on 16/3/24.
 //  Copyright © 2016年 UUV. All rights reserved.
@@ -10,9 +10,15 @@
 
 @class UUVListTopBar;
 
+typedef NS_ENUM(NSUInteger,UUVListTopBarStyle) {
+    UUVListTopBarStyleScale=0,///<Hide indicator and scale item when scrolling.
+    UUVListTopBarStyleIndicator,///<Show indicator and no scale.
+};
+
 @protocol UUVListTopBarDelegate <NSObject>
-@required
-- (void)itemAtIndex:(NSUInteger)index didSelectInTopBar:(UUVListTopBar*)bar;
+@optional
+- (void)topBar:(UUVListTopBar *)bar willTransitionFromIndex:(NSUInteger)fromIdx toIndex:(NSUInteger)toIdx;
+- (void)topBar:(UUVListTopBar *)bar didTransitionToIndex:(NSUInteger)index;
 @end
 
 @interface UUVListTopBar : UIView
@@ -24,7 +30,8 @@
 @property (nonatomic, strong) NSArray<NSString*> *itemTitles;///<A array of each item`s text.
 @property (nonatomic, strong) UIColor            *indicatorColor;///<The color for indicator`s color.Default use itemSelectedColor.
 @property (nonatomic, assign) CGFloat            indicatorHeight;///<The height for indicator`s height.Default is 1.5f.
-@property (nonatomic, assign) BOOL               showIndicator;///<A flag for specified whether show indicator view.Default is NO.
+@property (nonatomic, assign) UUVListTopBarStyle style;///<The specified style for top bar.Default use .scale.
+@property (nonatomic, assign) CGFloat            itemHorizontalSpace;///<The horizontal space between items in top bar.Default is 10.
 
 @property (nonatomic, weak) id<UUVListTopBarDelegate>  delegate;///<The object who can receive item click event in top bar.
 @property (nonatomic, weak) UIScrollView               *contanierView;///<A contanier view that can dispaly items.
