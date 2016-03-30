@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "UUVPagesController"
-  s.version      = "0.0.2"
+  s.version      = "0.0.3"
   s.summary      = "A navigation list style like DAPagesContainer."
 
   # This description is used to generate tags and improve search results.
