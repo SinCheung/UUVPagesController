@@ -10,6 +10,7 @@
 
 #define UUVListTopBarItemSpace    10.f
 #define UUVListTopBarItemMinWidth 44.f
+#define UUVListTopBarDuration     0.01f
 
 static void* UUVListTopBarContainerContext = &UUVListTopBarContainerContext;
 static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFloat *a, UIColor *color) {
@@ -35,12 +36,23 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     CGFloat _finalContentWidth;
     CGFloat _contanierWidth;
     CGFloat _externContanierWidth;
+    NSUInteger _countOfTitles;
     BOOL    _modifyOffsetManual;
     BOOL    _shouldChangeItemPosition;
     struct {
-        unsigned int itemDidSelected : 1;
-        unsigned int itemTransition  : 1;
+        unsigned int itemDidSelected    : 1;
+        unsigned int itemTransition     : 1;
+        unsigned int transitionCustom   : 1;
+        unsigned int useCustomIndicator : 1;
+        unsigned int bottomMargin       : 1;
     } _listTopDelegateFlag;
+    
+    struct {
+        unsigned int numOfItems       : 1;
+        unsigned int itemAtIndex      : 1;
+        unsigned int titleAtIdx       : 1;
+        unsigned int canUseDataSource : 1;
+    } _listTopDataSourceFlag;
 }
 @property (nonatomic, strong) UIScrollView *itemsContanier;
 @property (nonatomic, strong) UIView       *indicator;
@@ -55,46 +67,87 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     self = [super initWithFrame:frame];
     if (self) {
         self.itemTitles = titles.copy;
-        _contanierWidth = CGRectGetWidth(frame);
     }
     return self;
 }
 
-- (void)reloadData
+- (void)dealloc
 {
-    [self setupSubviews];
+    if (_contanierView) {
+        [self stopObserveContentOffset:_contanierView];
+    }
 }
 
-- (void)setupSubviews
+- (void)reloadData
 {
+    [self setupSubviewsThenToIndex:0];
+}
+
+- (void)reloadDataThenToIndex:(NSUInteger)index
+{
+    [self setupSubviewsThenToIndex:index];
+}
+
+- (void)setupSubviewsThenToIndex:(NSUInteger)toIndex
+{
+    NSUInteger toIdx = toIndex;
+     _contanierWidth = CGRectGetWidth(self.bounds);
     if (!_itemViews) {
         _itemViews = [NSMutableArray arrayWithCapacity:_itemTitles.count];
     }
     
+    [_itemViews makeObjectsPerformSelector:@selector(removeFromSuperview)];
     [_itemViews removeAllObjects];
     _selectedIndex = 0;
-    _finalContentWidth = 0.f;
-    _itemSelectedScale = 17.f/15.f;
+    if (_itemSelectedScale<1.f) _itemSelectedScale = 17.f/15.f;
     _shouldChangeItemPosition = NO;
-    _itemHorizontalSpace = _itemHorizontalSpace!=0 ?: UUVListTopBarItemSpace;
+    _itemHorizontalSpace = _itemHorizontalSpace!=0 ? _itemHorizontalSpace : UUVListTopBarItemSpace;
+    _finalContentWidth = _itemHorizontalSpace;
     
-    [self addSubview:self.itemsContanier];
-    if (self.itemsContanier.subviews.count) {
-        [self.itemsContanier.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    if (!_itemsContanier) {
+        [self addSubview:self.itemsContanier];
     }
     
-    __weak typeof(self) weakSelf = self;
-    [_itemTitles enumerateObjectsUsingBlock:^(NSString * _Nonnull title, NSUInteger idx, BOOL * _Nonnull stop) {
-        UIButton *btn = [weakSelf genUIButtonWithTitle:title
-                                                 color:weakSelf.itemColor
-                                                  font:weakSelf.itemFont
-                                                 index:idx];
-        [weakSelf.itemViews addObject:btn];
-        [weakSelf.itemsContanier addSubview:btn];
-        if (idx==0) {
-            [weakSelf makeItemSelected:btn];
+    _itemsContanier.contentOffset = CGPointZero;
+    if (_itemsContanier.subviews.count) {
+        [_itemsContanier.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    }
+    
+    if (_listTopDataSourceFlag.canUseDataSource) {
+        _countOfTitles = [_dataSource numberOfItemsInTopBar:self];
+    } else {
+        _countOfTitles = _itemTitles.count;
+    }
+    
+    if (_countOfTitles==0) {
+        return;
+    }
+    
+    toIdx = toIndex>=_countOfTitles ? 0 : toIndex;
+    if (_countOfTitles>0 && _itemTitles.count) {
+        __weak typeof(self) weakSelf = self;
+        [_itemTitles enumerateObjectsUsingBlock:^(NSString * _Nonnull title, NSUInteger idx, BOOL * _Nonnull stop) {
+            UIButton *btn = nil;
+            btn = [weakSelf genUIButtonWithTitle:title
+                                           color:weakSelf.itemColor
+                                            font:weakSelf.itemFont
+                                           index:idx];
+            [weakSelf.itemViews addObject:btn];
+            [weakSelf.itemsContanier addSubview:btn];
+            if (idx==toIdx) {
+                [weakSelf makeItemSelected:btn];
+            }
+        }];
+    } else {
+        for (NSUInteger idx=0; idx<_countOfTitles; idx++) {
+            UIButton *btn = [self genUIButtonFromDataSourceAtIndex:idx];
+            [self.itemViews addObject:btn];
+            [self.itemsContanier addSubview:btn];
+            if (idx==toIdx) {
+                [self makeItemSelected:btn];
+            }
         }
-    }];
+    }
     
     if (_finalContentWidth<_contanierWidth) {
         __block CGFloat totalWidth = 0.f;
@@ -123,10 +176,12 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     _itemsContanier.contentSize = CGSizeMake(_finalContentWidth, CGRectGetHeight(_itemsContanier.frame));
     
     if (_style==UUVListTopBarStyleIndicator) {
-        CGRect frame = self.indicator.frame;
         UIButton *firstbtn = _itemViews.firstObject;
-        frame.size.width = CGRectGetWidth(firstbtn.frame);
-        self.indicator.frame = frame;
+        if (!_listTopDelegateFlag.useCustomIndicator) {
+            CGRect frame = self.indicator.frame;
+            frame.size.width = CGRectGetWidth(firstbtn.frame);
+            self.indicator.frame = frame;
+        }
         
         CGPoint center = self.indicator.center;
         center.x = firstbtn.center.x;
@@ -137,6 +192,8 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         [_indicator removeFromSuperview];
         _indicator = nil;
     }
+    
+    self.selectedIndex = toIdx;
 }
 
 - (UIButton *)genUIButtonWithTitle:(NSString *)title
@@ -159,15 +216,44 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     return btn;
 }
 
+- (UIButton *)genUIButtonFromDataSourceAtIndex:(NSUInteger)idx
+{
+    UIButton *btn = [_dataSource topBar:self itemAtIndex:idx];
+    btn.tag = idx;
+    
+    if (_listTopDataSourceFlag.titleAtIdx) {
+        NSString *title = [_dataSource topBar:self titleForItemAtIndex:idx];
+        [btn setTitle:title forState:UIControlStateNormal];
+        [btn setTitleColor:self.itemColor forState:UIControlStateNormal];
+        [btn.titleLabel setFont:self.itemFont];
+    }
+    
+    [btn removeAllTargets];
+    [btn addTarget:self action:@selector(itemDidClick:) forControlEvents:(UIControlEventTouchUpInside)];
+    
+    CGFloat width = CGRectGetWidth(btn.bounds);
+    CGFloat height = CGRectGetHeight(btn.bounds);
+    CGFloat y = (CGRectGetHeight(self.bounds)-height)/2.f;
+    width = width>UUVListTopBarItemMinWidth ? width : UUVListTopBarItemMinWidth;
+    btn.frame = CGRectMake(_finalContentWidth, y, width, height);
+    _finalContentWidth+=(width+_itemHorizontalSpace);
+    
+    return btn;
+}
+
 - (void)makeItemSelected:(UIButton *)item
 {
-    item.transform = CGAffineTransformMakeScale(_itemSelectedScale, _itemSelectedScale);
+    if (_itemSelectedScale>1.f) {
+        item.transform = CGAffineTransformMakeScale(_itemSelectedScale, _itemSelectedScale);
+    }
     [item setTitleColor:self.itemSelectedColor forState:UIControlStateNormal];
 }
 
 - (void)makeItemNormal:(UIButton *)item
 {
-    item.transform = CGAffineTransformIdentity;
+    if (_itemSelectedScale>1.f) {
+        item.transform = CGAffineTransformIdentity;
+    }
     [item setTitleColor:self.itemColor forState:UIControlStateNormal];
 }
 
@@ -227,9 +313,22 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
 - (UIView *)indicator
 {
     if (!_indicator) {
-        _indicator = [UIView new];
-        _indicator.backgroundColor = self.indicatorColor;
-        _indicator.frame = CGRectMake(0, CGRectGetHeight(self.frame)-self.indicatorHeight-.5f, 0, self.indicatorHeight);
+        if (_listTopDelegateFlag.useCustomIndicator) {
+            _indicator = [_delegate customIndicatorInTopBar:self];
+            CGFloat height = CGRectGetHeight(_indicator.bounds);
+            height = height<self.indicatorHeight ? self.indicatorHeight : height;
+            CGFloat bottomMargin = 2.f;
+            if (_listTopDelegateFlag.bottomMargin) {
+                bottomMargin = [_delegate customIndicatorMarginToBottomInTopBar:self];
+            }
+            
+            bottomMargin = bottomMargin>6.f ? 6.f : (bottomMargin<2.f ? 2.f : bottomMargin);
+            _indicator.frame = CGRectMake(0, CGRectGetHeight(self.frame)-height-bottomMargin, CGRectGetWidth(_indicator.bounds), height);
+        } else {
+            _indicator = [UIView new];
+            _indicator.backgroundColor = self.indicatorColor;
+            _indicator.frame = CGRectMake(0, CGRectGetHeight(self.frame)-self.indicatorHeight-.5f, 0, self.indicatorHeight);
+        }
     }
     return _indicator;
 }
@@ -245,7 +344,7 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
 
 - (void)setSelectedIndex:(NSUInteger)selectedIndex
 {
-    if (_selectedIndex!=selectedIndex && selectedIndex<_itemTitles.count) {
+    if (_selectedIndex!=selectedIndex && selectedIndex<_countOfTitles) {
         _selectedIndex = selectedIndex;
         
         UIButton *sender = self.itemViews[selectedIndex];
@@ -259,10 +358,10 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
 
 - (void)setItemSelectedScale:(CGFloat)itemSelectedScale
 {
-    if (itemSelectedScale>1.f) {
+    if (itemSelectedScale>=1.f) {
         _itemSelectedScale = itemSelectedScale;
     } else {
-        NSLog(@"You shoud set the selected scale greater than 1.0.");
+        NSLog(@"[UUVListTopBar]: You shoud set the selected scale not less than 1.0.");
     }
 }
 
@@ -286,6 +385,20 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
     _delegate = delegate;
     _listTopDelegateFlag.itemDidSelected = [delegate respondsToSelector:@selector(topBar:didTransitionToIndex:)];
     _listTopDelegateFlag.itemTransition = [delegate respondsToSelector:@selector(topBar:willTransitionFromIndex:toIndex:)];
+    _listTopDelegateFlag.transitionCustom = [delegate respondsToSelector:@selector(topBar:willTransitionFromItem:toItem:ratio:)];
+    _listTopDelegateFlag.useCustomIndicator = [delegate respondsToSelector:@selector(customIndicatorInTopBar:)];
+    _listTopDelegateFlag.bottomMargin = [delegate respondsToSelector:@selector(customIndicatorMarginToBottomInTopBar:)];
+}
+
+- (void)setDataSource:(id<UUVListTopBarDataSource>)dataSource
+{
+    _dataSource = dataSource;
+    _listTopDataSourceFlag.numOfItems = [dataSource respondsToSelector:@selector(numberOfItemsInTopBar:)];
+    _listTopDataSourceFlag.itemAtIndex = [dataSource respondsToSelector:@selector(topBar:itemAtIndex:)];
+    _listTopDataSourceFlag.titleAtIdx = [dataSource respondsToSelector:@selector(topBar:titleForItemAtIndex:)];
+    _listTopDataSourceFlag.canUseDataSource = (_listTopDataSourceFlag.itemAtIndex &&
+                                               _listTopDataSourceFlag.numOfItems /*&&
+                                               _listTopDataSourceFlag.titleAtIdx*/);
 }
 
 #pragma mark - observe
@@ -324,47 +437,54 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
                 uuv_getRBGAValueWithUIColor(&highlightedRed,&highlightedGreen,&highlightedBlue,&highlightedAlpha,self.itemSelectedColor);
                 
                 CGFloat absRatio = fabs(ratio);
-                UIColor *prev = [UIColor colorWithRed:red * absRatio + highlightedRed * (1 - absRatio)
-                                                green:green * absRatio + highlightedGreen * (1 - absRatio)
-                                                 blue:blue * absRatio + highlightedBlue  * (1 - absRatio)
-                                                alpha:alpha * absRatio + highlightedAlpha  * (1 - absRatio)];
-                UIColor *next = [UIColor colorWithRed:red * (1 - absRatio) + highlightedRed * absRatio
-                                                green:green * (1 - absRatio) + highlightedGreen * absRatio
-                                                 blue:blue * (1 - absRatio) + highlightedBlue * absRatio
-                                                alpha:alpha * (1 - absRatio) + highlightedAlpha * absRatio];
-                
-                [previosSelectedItem setTitleColor:prev forState:UIControlStateNormal];
-                [nextSelectedItem setTitleColor:next forState:UIControlStateNormal];
+                if (_style!=UUVListTopBarStyleCustom) {
+                    UIColor *prev = [UIColor colorWithRed:red * absRatio + highlightedRed * (1 - absRatio)
+                                                    green:green * absRatio + highlightedGreen * (1 - absRatio)
+                                                     blue:blue * absRatio + highlightedBlue  * (1 - absRatio)
+                                                    alpha:alpha * absRatio + highlightedAlpha  * (1 - absRatio)];
+                    UIColor *next = [UIColor colorWithRed:red * (1 - absRatio) + highlightedRed * absRatio
+                                                    green:green * (1 - absRatio) + highlightedGreen * absRatio
+                                                     blue:blue * (1 - absRatio) + highlightedBlue * absRatio
+                                                    alpha:alpha * (1 - absRatio) + highlightedAlpha * absRatio];
+                    
+                    [previosSelectedItem setTitleColor:prev forState:UIControlStateNormal];
+                    [nextSelectedItem setTitleColor:next forState:UIControlStateNormal];
+                }
                 
                 if (_style==UUVListTopBarStyleIndicator) {
-                    CGRect frame = _indicator.frame;
                     CGPoint center = _indicator.center;
-                    
                     CGFloat preX = previosSelectedItem.center.x;
                     CGFloat nextX = nextSelectedItem.center.x;
-                    CGFloat preWidth = CGRectGetWidth(previosSelectedItem.frame);
-                    CGFloat nextWidth = CGRectGetWidth(nextSelectedItem.frame);
-                    
-                    CGFloat deltaWith = nextWidth-preWidth;
-                    frame.size.width = preWidth+(absRatio*deltaWith);
-                    
                     CGFloat deltaCenterX = nextX-preX;
                     center.x = preX+(absRatio*deltaCenterX);
                     
-                    _indicator.frame = frame;
+                    if (!_listTopDelegateFlag.useCustomIndicator) {
+                        CGRect frame = _indicator.frame;
+                        CGFloat preWidth = CGRectGetWidth(previosSelectedItem.frame);
+                        CGFloat nextWidth = CGRectGetWidth(nextSelectedItem.frame);
+                        
+                        CGFloat deltaWith = nextWidth-preWidth;
+                        frame.size.width = preWidth+(absRatio*deltaWith);
+                        _indicator.frame = frame;
+                    }
+                    
                     _indicator.center = center;
-                } else if (_style==UUVListTopBarStyleScale) {
+                } else if (_style==UUVListTopBarStyleScale && _itemSelectedScale>1.f) {
                     CGFloat preScale = 1.f + (_itemSelectedScale-1.f)*(1-absRatio);
                     CGFloat nextScale = 1.f + (_itemSelectedScale-1.f)*absRatio;
                     previosSelectedItem.transform = CGAffineTransformMakeScale(preScale, preScale);
                     nextSelectedItem.transform = CGAffineTransformMakeScale(nextScale, nextScale);
+                } else if (_style==UUVListTopBarStyleCustom) {
+                    if (_listTopDelegateFlag.transitionCustom) {
+                        [_delegate topBar:self willTransitionFromItem:previosSelectedItem toItem:nextSelectedItem ratio:absRatio];
+                    }
                 }
                 
                 if (_listTopDelegateFlag.itemTransition) {
                     [_delegate topBar:self willTransitionFromIndex:_selectedIndex toIndex:targetIndex];
                 }
                 
-                if (absRatio>0.5f) {
+                if (absRatio>0.99f) {
                     self.selectedIndex = _contanierView.contentOffset.x / _externContanierWidth;
                 }
             }
@@ -388,7 +508,9 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         center.x = sender.center.x;
         
         CGRect frame = _indicator.frame;
-        frame.size.width = CGRectGetWidth(sender.frame);
+        if (!_listTopDelegateFlag.useCustomIndicator) {
+            frame.size.width = CGRectGetWidth(sender.frame);
+        }
         
         [UIView animateWithDuration:0.2f
                          animations:^{
@@ -397,11 +519,15 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
                          }];
     }
     
+    if (!_contanierView) {
+        return;
+    }
+    
     _modifyOffsetManual = YES;
      CGPoint point = CGPointMake(_selectedIndex*_externContanierWidth, 0);
-    [UIView animateWithDuration:0.0f
+    [UIView animateWithDuration:UUVListTopBarDuration
                      animations:^{
-                         [_contanierView setContentOffset:point animated:NO];
+                         _contanierView.contentOffset = point;
                      } completion:^(BOOL finished) {
                          _modifyOffsetManual = NO;
                      }];

@@ -1,7 +1,7 @@
 # UUVPagesController
 A navigation top bar like "网易新闻" or "今日头条".You just pass viewControllers that display all navigation item in or below UINavigationBar.There are two style for change select index, one is scale and another is show indicator.
 
-###Basic usage
+### Basic usage
 <pre><code>
 	#import "UUVPagesController.h"
 	
@@ -13,15 +13,15 @@ A navigation top bar like "网易新闻" or "今日头条".You just pass viewCon
     	
 </code></pre>
 
-###Notes
+### Notes
 <ol>
 <li>Do not support orientation rotation.</li>
 <li>Just support ARC.</li>
 <li>If you content behind NavigationBar,you should check out the value of viewController`s edgesForExtendedLayout.</li>
 </ol>
 
-###Installation
-Latest version: 0.0.3
+### Installation
+Latest version: 0.0.4
 <pre><code>
 pod search UUVPagesController
 </code></pre>
@@ -30,9 +30,9 @@ if you cannot search out the latest version,try:</br>
 pod setup
 </code></pre>
 
-###Release Notes
+### Release Notes
 <li>0.0.3</li>
 Add show indicator style and bug fixed.
 
-###License
+### License
 MIT
