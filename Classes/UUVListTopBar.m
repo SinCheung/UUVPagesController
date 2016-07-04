@@ -228,7 +228,9 @@ static void  uuv_getRBGAValueWithUIColor(CGFloat *r,CGFloat *g, CGFloat *b,CGFlo
         [btn.titleLabel setFont:self.itemFont];
     }
     
-    [btn removeAllTargets];
+    [[btn allTargets] enumerateObjectsUsingBlock: ^(id object, BOOL *stop) {
+        [btn removeTarget:object action:NULL forControlEvents:UIControlEventAllEvents];
+    }];
     [btn addTarget:self action:@selector(itemDidClick:) forControlEvents:(UIControlEventTouchUpInside)];
     
     CGFloat width = CGRectGetWidth(btn.bounds);
